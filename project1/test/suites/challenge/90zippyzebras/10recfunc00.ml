@@ -1,6 +1,7 @@
 (*!tests!
  *
  * { "output": ["4"] }
+ *
  *)
 let f =
   let rec g = fun x ->

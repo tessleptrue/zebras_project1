@@ -1,6 +1,7 @@
 (*!tests!
  *
  * { "output": ["true"] }
+ *
  *)
 
 let even_odd =
