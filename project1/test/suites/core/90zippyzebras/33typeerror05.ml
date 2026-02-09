@@ -2,6 +2,7 @@
  *
  * { "exception": "TypeError" }
  *
- *) 
+ *)
 
-(fun x y -> x - y) 2 ;; 
+let rec f x = x * x ;; 
+f (1 2) ;; 

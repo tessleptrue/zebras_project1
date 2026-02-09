@@ -2,6 +2,6 @@
  *
  * { "exception": "TypeError" }
  *
- *) 
+ *)
 
-(fun x y -> x - y) 2 ;; 
+5 / 0 ;; 
