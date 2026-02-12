@@ -1,5 +1,5 @@
 (*!tests!
- * { "exception": "UnboundVariable" }
+ * { "exception": "UndefinedFunction" }
  *
  *)
 

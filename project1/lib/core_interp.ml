@@ -35,6 +35,7 @@ module Value = struct
     | V_Bool b -> Bool.to_string b
 end
 
+
 (* Environments.  An environment is a finite map from identifiers to values.
  * We will interchangeably treat environments as functions or sets or lists
  * of pairs in documentation.  We will use ρ as a metavariable over
@@ -57,5 +58,7 @@ and if/then statements. Do we also need to add functions for reading scripts and
 (* exec p = v, where `v` is the result of executing `p`.
  *)
 let exec (_ : Ast.Script.t) : Value.t =
+  match p with 
+  | 
   failwith "Unimplemented:  Core.Interp.exec"
 
