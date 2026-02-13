@@ -36,11 +36,6 @@ module Value = struct
 end
 
 
-(* Environments.  An environment is a finite map from identifiers to values.
- * We will interchangeably treat environments as functions or sets or lists
- * of pairs in documentation.  We will use ρ as a metavariable over
- * environments.
- *)
 module Env = struct
   type vars = (Ast.Id.t * Value.t) list
   (* Function name, arguments, expression *)
@@ -49,16 +44,17 @@ module Env = struct
    *)
   type t = vars * funks
   let empty : t = ([], [])
+  [@@deriving show]
 
-
-  (*  lookup ρ x = ρ(x).
-   *)
+  (*  empty = ρ, where dom ρ = ∅. lookup ρ x = ρ(x). *)
+  
   let lookup (rho : t) (x : Ast.Id.t) : Value.t =
     let (vars, _) = rho in
     List.assoc x vars
 
   (*  update ρ x v = ρ{x → v}.
    *)
+
   let update (rho : t) (x : Ast.Id.t) (v : Value.t) : t =
     let (vars, funks) = rho in
     ((x, v) :: List.remove_assoc x vars, funks)
@@ -68,7 +64,9 @@ module Env = struct
     (vars, ((f, x), vt) :: List.remove_assoc (f, x) funks)
 end
 
-
+(* It looks like what we need to do is copy a bunch of stuff from OCaml--, then extend to include bools
+and if/then statements. Do we also need to add functions for reading scripts and programs??
+*)
 
 let unop (op : Ast.Expr.unop) (v : Value.t) : Value.t =
   match (op, v) with
@@ -96,6 +94,43 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
 
 (* exec p = v, where `v` is the result of executing `p`.
  *)
-let exec (_ : Ast.Script.t) : Value.t =
-  failwith "Unimplemented:  Core.Interp.exec"
+
+ (* Write a seperate eval function to evaluate expressions 
+  Like sample code, but now we have to deal with function definitions *)
+
+let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
+  match e with
+(*! end !*)
+  | Ast.Expr.Var x -> Env.lookup rho x
+  | Ast.Expr.Num n -> Value.V_Int n
+  |Ast.Expr.Unop (op, e) ->
+    let v = eval rho e in 
+    unop op v 
+(*! eval binop !*)
+  | Ast.Expr.Binop (op, e, e') ->
+    let v = eval rho e in
+    let v' = eval rho e' in
+    binop op v v'
+(*! end !*)
+(*! eval let !*)
+  | Ast.Expr.Let (x, e', e) ->
+    let v' = eval rho e' in
+    eval (Env.update rho x v') e
+  | Ast.Expr.If (Bool e, e0, e1) ->
+    (match e with
+    | true -> eval rho e0
+    | false -> eval rho e1)
+  |_ -> failwith "Unimplemented" 
+
+let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
+    match fds with
+      | [] -> ([], [])
+      | (f, x, v)::xs -> Env.fun_update (def_funks rho xs) f x v  
+
+let exec (p : Ast.Script.t) : Value.t =
+  match p with
+    | Pgm (fundefs, exp) -> 
+        let rho = def_funks Env.empty fundefs in
+        eval rho exp
+    
 
