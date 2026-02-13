@@ -50,7 +50,9 @@ module Env = struct
   
   let lookup (rho : t) (x : Ast.Id.t) : Value.t =
     let (vars, _) = rho in
-    List.assoc x vars
+    match List.assoc_opt x vars with
+    | Some v -> v
+    | None -> raise (UnboundVariable x)
 
   (*  update ρ x v = ρ{x → v}.
    *)
@@ -72,7 +74,8 @@ let unop (op : Ast.Expr.unop) (v : Value.t) : Value.t =
   match (op, v) with
   |(Ast.Expr.Not, Value.V_Bool n) -> Value.V_Bool (not n)
   |(Ast.Expr.Neg, Value.V_Int n) -> Value.V_Int (-n)
-  |_ -> failwith "Unimplemented"
+  |_  -> raise (TypeError "Invalid operand for unary operator")
+
 
 let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   match (op, v, v') with
@@ -89,7 +92,8 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   | (Ast.Expr.Gt, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n > n')
   | (Ast.Expr.Le, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n <= n')
   | (Ast.Expr.Ge, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n >= n')
-  |_ -> failwith "you even more stupid idiot"
+  |_ -> raise (TypeError "Unsupported expression")
+
 
 
 (* exec p = v, where `v` is the result of executing `p`.
@@ -103,6 +107,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
 (*! end !*)
   | Ast.Expr.Var x -> Env.lookup rho x
   | Ast.Expr.Num n -> Value.V_Int n
+  | Ast.Expr.Bool b -> Value.V_Bool b
   |Ast.Expr.Unop (op, e) ->
     let v = eval rho e in 
     unop op v 
@@ -120,7 +125,12 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     (match e with
     | true -> eval rho e0
     | false -> eval rho e1)
-  |_ -> failwith "Unimplemented" 
+  | Ast.Expr.Call (f, args) -> 
+    let (vars, funks) = rho in 
+    match 
+    | None -> raise (UndefinedFunction "no function found")
+    | Some -> 
+  |_ -> raise (TypeError "Unsupported expression")
 
 let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
     match fds with
