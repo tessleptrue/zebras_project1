@@ -54,9 +54,14 @@ module Env = struct
     | Some v -> v
     | None -> raise (UnboundVariable x)
 
+  let fun_lookup (rho : t) (fs : funks) : (Ast.Id.t * Ast.Id.t list) * Ast.Expr.t =
+    let (funks, _) = rho in
+    match List.find_opt f fs with
+    | Some v -> v
+    | None -> raise (UnboundVariable x)
+
   (*  update ρ x v = ρ{x → v}.
    *)
-
   let update (rho : t) (x : Ast.Id.t) (v : Value.t) : t =
     let (vars, funks) = rho in
     ((x, v) :: List.remove_assoc x vars, funks)
@@ -95,13 +100,11 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   |_ -> raise (TypeError "Unsupported expression")
 
 
-
 (* exec p = v, where `v` is the result of executing `p`.
  *)
 
  (* Write a seperate eval function to evaluate expressions 
   Like sample code, but now we have to deal with function definitions *)
-
 let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
   match e with
 (*! end !*)
