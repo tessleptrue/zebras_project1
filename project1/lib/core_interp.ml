@@ -37,9 +37,12 @@ end
 
 
 module Env = struct
-  type vars = (Ast.Id.t * Value.t) list
+  type var = (Ast.Id.t * Value.t) 
+  type vars = var list
   (* Function name, arguments, expression *)
-  type funks = ((Ast.Id.t * Ast.Id.t list) * Ast.Expr.t) list
+
+  type funk = (Ast.Id.t * (Ast.Id.t list * Ast.Expr.t))
+  type funks = funk list
   (*  empty = ρ, where dom ρ = ∅.
    *)
   type t = vars * funks
@@ -49,26 +52,26 @@ module Env = struct
   (*  empty = ρ, where dom ρ = ∅. lookup ρ x = ρ(x). *)
   
   let lookup (rho : t) (x : Ast.Id.t) : Value.t =
-    let (vars, _) = rho in
-    match List.assoc_opt x vars with
+    let (vs, _) = rho in
+    match List.assoc_opt x vs with
     | Some v -> v
     | None -> raise (UnboundVariable x)
 
-  let fun_lookup (rho : t) (fs : funks) : (Ast.Id.t * Ast.Id.t list) * Ast.Expr.t =
-    let (funks, _) = rho in
-    match List.find_opt f fs with
+  let fun_lookup (rho : t) (f : Ast.Id.t): Ast.Id.t list * Ast.Expr.t =
+    let (_ , fs) = rho in
+    match List.assoc_opt f fs with
     | Some v -> v
-    | None -> raise (UnboundVariable x)
+    | None -> raise (UnboundVariable f) 
 
   (*  update ρ x v = ρ{x → v}.
    *)
   let update (rho : t) (x : Ast.Id.t) (v : Value.t) : t =
-    let (vars, funks) = rho in
-    ((x, v) :: List.remove_assoc x vars, funks)
+    let (vs, fs) = rho in
+    ((x, v) :: List.remove_assoc x vs, fs)
   
   let fun_update (rho:t) (f : Ast.Id.t) (x : Ast.Id.t list) (vt :Ast.Expr.t) : t =
-    let (vars, funks) = rho in
-    (vars, ((f, x), vt) :: List.remove_assoc (f, x) funks)
+    let (vs, fs) = rho in
+    (vs, (f, (x, vt)) :: List.remove_assoc f fs)
 end
 
 (* It looks like what we need to do is copy a bunch of stuff from OCaml--, then extend to include bools
@@ -91,7 +94,7 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   | (Ast.Expr.Mod, Value.V_Int n, Value.V_Int n') -> Value.V_Int (n mod n')
   | (Ast.Expr.And, Value.V_Bool n, Value.V_Bool n') -> Value.V_Bool (n && n')
   | (Ast.Expr.Or, Value.V_Bool n, Value.V_Bool n') -> Value.V_Bool (n || n')
-  | (Ast.Expr.Eq, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n == n')
+  | (Ast.Expr.Eq, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n = n')
   | (Ast.Expr.Ne, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n != n')
   | (Ast.Expr.Lt, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n < n')
   | (Ast.Expr.Gt, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n > n')
@@ -102,6 +105,13 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
 
 (* exec p = v, where `v` is the result of executing `p`.
  *)
+
+let rec helpy (rho : Env.t) (xs : Ast.Id.t list) (args : Value.t list) : Env.t = 
+    match (xs, args) with
+    | ([], []) -> rho
+    | ([], _) -> failwith "too many args"
+    | (_, []) -> failwith "too few args"
+    | (y::ys, b::bs) -> (helpy (Env.update rho y b) ys bs )
 
  (* Write a seperate eval function to evaluate expressions 
   Like sample code, but now we have to deal with function definitions *)
@@ -129,10 +139,15 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     | true -> eval rho e0
     | false -> eval rho e1)
   | Ast.Expr.Call (f, args) -> 
-    let (vars, funks) = rho in 
-    match 
-    | None -> raise (UndefinedFunction "no function found")
-    | Some -> 
+    let (xs, e) = Env.fun_lookup rho f in
+      let rec val_list (args: Ast.Expr.t list) : Value.t list = 
+        (match args with 
+          |[] -> []
+          |b::bs -> (eval rho b) :: (val_list bs))
+         in
+         eval (helpy rho xs (val_list args)) e
+    (* (
+    eval rho (Env.fun_lookup rho f)) *)
   |_ -> raise (TypeError "Unsupported expression")
 
 let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
