@@ -61,7 +61,7 @@ module Env = struct
     let (_ , fs) = rho in
     match List.assoc_opt f fs with
     | Some v -> v
-    | None -> raise (UnboundVariable f) 
+    | None -> raise (UndefinedFunction f) 
 
   (*  update ρ x v = ρ{x → v}.
    *)
@@ -106,12 +106,12 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
 (* exec p = v, where `v` is the result of executing `p`.
  *)
 
-let rec helpy (rho : Env.t) (xs : Ast.Id.t list) (args : Value.t list) : Env.t = 
+let rec arg_match (arg_env : Env.t) (xs : Ast.Id.t list) (args : Value.t list) : Env.t = 
     match (xs, args) with
-    | ([], []) -> rho
+    | ([], []) -> arg_env
     | ([], _) -> failwith "too many args"
     | (_, []) -> failwith "too few args"
-    | (y::ys, b::bs) -> (helpy (Env.update rho y b) ys bs )
+    | (y::ys, b::bs) -> (arg_match (Env.update arg_env y b) ys bs )
 
  (* Write a seperate eval function to evaluate expressions 
   Like sample code, but now we have to deal with function definitions *)
@@ -134,10 +134,11 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
   | Ast.Expr.Let (x, e', e) ->
     let v' = eval rho e' in
     eval (Env.update rho x v') e
-  | Ast.Expr.If (Bool e, e0, e1) ->
-    (match e with
-    | true -> eval rho e0
-    | false -> eval rho e1)
+  | Ast.Expr.If (e, e0, e1) ->
+    (match (eval rho e) with
+    | Value.V_Bool true -> eval rho e0
+    | Value.V_Bool false -> eval rho e1
+    | _-> failwith "stupid" )
   | Ast.Expr.Call (f, args) -> 
     let (xs, e) = Env.fun_lookup rho f in
       let rec val_list (args: Ast.Expr.t list) : Value.t list = 
@@ -145,15 +146,15 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
           |[] -> []
           |b::bs -> (eval rho b) :: (val_list bs))
          in
-         eval (helpy rho xs (val_list args)) e
-    (* (
-    eval rho (Env.fun_lookup rho f)) *)
-  |_ -> raise (TypeError "Unsupported expression")
+         eval (arg_match rho xs (val_list args)) e
+
 
 let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
     match fds with
-      | [] -> ([], [])
-      | (f, x, v)::xs -> Env.fun_update (def_funks rho xs) f x v  
+      | [] -> rho
+      | (f, x, v)::xs -> def_funks (Env.fun_update rho f x v) xs
+  
+        (* Env.fun_update (def_funks happy xs) f x v   *)
 
 let exec (p : Ast.Script.t) : Value.t =
   match p with
