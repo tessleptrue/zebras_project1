@@ -61,7 +61,7 @@ module Env = struct
     let (_ , fs) = rho in
     match List.assoc_opt f fs with
     | Some v -> v
-    | None -> raise (UnboundVariable f) 
+    | None -> raise (UndefinedFunction f) 
 
   (*  update ρ x v = ρ{x → v}.
    *)
