@@ -24,7 +24,6 @@ module Value = struct
   type t = 
     | V_Int of int
     | V_Bool of bool
-
     | V_Fun of (Ast.Id.t list) * Ast.Expr.t
     [@@deriving show]
 
