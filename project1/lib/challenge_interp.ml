@@ -76,7 +76,14 @@ module Env = struct
   (*  lookup ρ x = ρ(x).
    *)
   let lookup (rho : t) (x : Ast.Id.t) : Value.t = 
-    List.assoc x rho
+    match List.assoc_opt x rho with
+    | Some v -> v
+    | None -> raise (UnboundVariable x)
+  
+  let fun_lookup (rho : t) (f : Ast.Id.t) : Value.t = 
+    match List.assoc_opt f rho with
+    | Some v -> v
+    | None -> raise (UndefinedFunction f)
 
   (*  update ρ x v = ρ{x → v}.
    *)
@@ -156,7 +163,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     | _-> failwith "stupid" )
   | Ast.Expr.Call (f, exprs) -> 
     (match f with
-      | Ast.Expr.Var x -> (match (Env.lookup rho x) with
+      | Ast.Expr.Var x -> (match (Env.fun_lookup rho x) with
                             | Value.V_Fun (args, e) -> 
                               (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
                                 (match exprs with 
@@ -164,11 +171,11 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
                                   |b::bs -> (eval rho b) :: (val_list bs))
                                 in
                                 eval (arg_match rho args (val_list exprs)) e)
-                            |_ -> failwith "don't be stupid")
-      | Ast.Expr.Num _ -> failwith "no numbers please"
-      | Ast.Expr.Bool _ -> failwith "no bools please"
-      | Ast.Expr.Unop (_, _) -> failwith "no unops please"
-      | Ast.Expr.Binop (_, _, _) -> failwith "no binops please"
+                            |_ -> raise (TypeError "failure"))
+      | Ast.Expr.Num _ -> raise (TypeError "failure")
+      | Ast.Expr.Bool _ -> raise (TypeError "failure")
+      | Ast.Expr.Unop (_, _) -> raise (TypeError "failure")
+      | Ast.Expr.Binop (_, _, _) -> raise (TypeError "failure")
       | Ast.Expr.If (e_ok, e0, e1) -> (match (eval rho (Ast.Expr.If (e_ok, e0, e1))) with
                                     | Value.V_Fun (args, e) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
                                         (match exprs with 
@@ -176,7 +183,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
                                           |b::bs -> (eval rho b) :: (val_list bs))
                                         in
                                         eval (arg_match rho args (val_list exprs)) e)
-                                    |_-> failwith "don't be stupid here either")
+                                    |_-> raise (TypeError "failure"))
       | Ast.Expr.Let (x, e0, e1) -> (match (eval rho (Ast.Expr.Let (x, e0, e1))) with
                                     | Value.V_Fun (args, e) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
                                         (match exprs with 
@@ -184,7 +191,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
                                           |b::bs -> (eval rho b) :: (val_list bs))
                                         in
                                         eval (arg_match rho args (val_list exprs)) e)
-                                    |_-> failwith "don't be stupid here either")
+                                    |_-> raise (TypeError "failure"))
       | Ast.Expr.Call (f, xs) -> (match (eval rho (Ast.Expr.Call (f, xs))) with
                                     | Value.V_Fun (args, e) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
                                         (match exprs with 
@@ -192,7 +199,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
                                           |b::bs -> (eval rho b) :: (val_list bs))
                                         in
                                         eval (arg_match rho args (val_list exprs)) e)
-                                    |_-> failwith "don't be stupid here either")
+                                    |_-> raise (TypeError "failure"))
       | Ast.Expr.Fun (args, e) -> (match (eval rho (Ast.Expr.Fun (args, e))) with
                                     | Value.V_Fun (args, e) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
                                         (match exprs with 
@@ -200,7 +207,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
                                           |b::bs -> (eval rho b) :: (val_list bs))
                                         in
                                         eval (arg_match rho args (val_list exprs)) e)
-                                    |_-> failwith "don't be stupid here either"))
+                                    |_-> raise (TypeError "failure")))
   | Ast.Expr.Fun (xs, e) -> Value.V_Fun (xs, e)
     (* eval (assign_vals xs) e *)
 
@@ -214,7 +221,7 @@ let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
 
 let exec (p : Ast.Script.t) : Value.t =
   match p with
-    | Pgm (fundefs, exp) -> 
+    | Ast.Script.Pgm (fundefs, exp) -> 
         let rho = def_funks Env.empty fundefs in
         eval rho exp
     
