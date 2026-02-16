@@ -24,6 +24,7 @@ module Value = struct
   type t = 
     | V_Int of int
     | V_Bool of bool
+    | V_Fun of Ast.Id.t list * Ast.Expr.t * Env.t
     [@@deriving show]
 
   (* to_string v = a string representation of v (more human-readable than
@@ -33,6 +34,7 @@ module Value = struct
     match v with
     | V_Int n -> Int.to_string n
     | V_Bool b -> Bool.to_string b
+    | V_Fun _ -> "<fun>"
 end
 
 (* Environments.  An environment is a finite map from identifiers to values.
