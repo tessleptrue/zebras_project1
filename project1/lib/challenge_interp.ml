@@ -34,7 +34,7 @@ module Value = struct
     match v with
     | V_Int n -> Int.to_string n
     | V_Bool b -> Bool.to_string b
-    | V_Fun (_, _) -> "fail whoopsies"
+    | V_Fun (_, _) -> "<fun>"
       (* let rec args_to_string (arguments : Ast.Var.t list) : string = 
                                   (match arguments with
                                     |[] -> ""
@@ -83,7 +83,9 @@ module Env = struct
   let fun_lookup (rho : t) (f : Ast.Id.t) : Value.t = 
     match List.assoc_opt f rho with
     | Some v -> v
-    | None -> raise (UndefinedFunction f)
+    | None -> raise (UndefinedFunction f) 
+    (*danner's test didn't accept when it was undefined function, so 
+    we need to make two different ones for fun look up and -> functions *)
 
   (*  update ρ x v = ρ{x → v}.
    *)
@@ -126,8 +128,8 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
 let rec arg_match (arg_env : Env.t) (xs : Ast.Id.t list) (args : Value.t list) : Env.t = 
     match (xs, args) with
     | ([], []) -> arg_env
-    | ([], _) -> failwith "too many args"
-    | (_, []) -> failwith "too few args"
+    | ([], _) -> raise (TypeError "too many args") (* need to fix these, changed to type error *)
+    | (_, []) -> raise (TypeError "too few args")
     | (y::ys, b::bs) -> (arg_match (Env.update arg_env y b) ys bs )
   
 (* let rec assign_vals (u_args : Id.t list) : Value.t list =
@@ -160,7 +162,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     (match (eval rho e) with
     | Value.V_Bool true -> eval rho e0
     | Value.V_Bool false -> eval rho e1
-    | _-> failwith "stupid" )
+    | _-> raise (TypeError "Invalid type "))
   | Ast.Expr.Call (f, exprs) -> 
     (match f with
       | Ast.Expr.Var x -> (match (Env.fun_lookup rho x) with
@@ -171,7 +173,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
                                   |b::bs -> (eval rho b) :: (val_list bs))
                                 in
                                 eval (arg_match rho args (val_list exprs)) e)
-                            |_ -> raise (TypeError "failure"))
+                            |_ -> raise (UndefinedFunction "failure"))
       | Ast.Expr.Num _ -> raise (TypeError "failure")
       | Ast.Expr.Bool _ -> raise (TypeError "failure")
       | Ast.Expr.Unop (_, _) -> raise (TypeError "failure")

@@ -4,4 +4,4 @@
  *
  *) 
 
-let f = fun x -> 4 in f () ;; 
+let f = fun x -> 4 in f 0 ;; 
