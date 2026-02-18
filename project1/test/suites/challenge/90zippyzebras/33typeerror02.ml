@@ -2,8 +2,7 @@
  *
  * { "exception": "TypeError" }
  *
- *) 
+ *)
 
-
-let rec f x y = x * y ;;
-f 3 ;;
+let x = 5 in
+if 3 then x else 0 ;;

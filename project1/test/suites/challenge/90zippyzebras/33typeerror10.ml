@@ -2,8 +2,8 @@
  *
  * { "exception": "TypeError" }
  *
- *) 
+ *)
 
-
-let rec f x y = x * y ;;
-f 3 ;;
+let g = fun x y -> x / y 
+in 
+g (4 5 6) ;; 

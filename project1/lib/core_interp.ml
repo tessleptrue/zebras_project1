@@ -111,8 +111,8 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
 let rec arg_match (arg_env : Env.t) (xs : Ast.Id.t list) (args : Value.t list) : Env.t = 
     match (xs, args) with
     | ([], []) -> arg_env
-    | ([], _) -> failwith "too many args"
-    | (_, []) -> failwith "too few args"
+    | ([], _) -> raise (TypeError "too many args")
+    | (_, []) -> raise (TypeError "too few args")
     | (y::ys, b::bs) -> (arg_match (Env.update arg_env y b) ys bs )
 
  (* Write a seperate eval function to evaluate expressions 
@@ -140,7 +140,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     (match (eval rho e) with
     | Value.V_Bool true -> eval rho e0
     | Value.V_Bool false -> eval rho e1
-    | _-> failwith "stupid" )
+    | _-> raise (TypeError "Invalid Type") )
   | Ast.Expr.Call (f, args) -> 
     let (xs, e) = Env.fun_lookup rho f in
       let rec val_list (args: Ast.Expr.t list) : Value.t list = 
