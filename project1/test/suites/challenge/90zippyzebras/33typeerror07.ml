@@ -3,5 +3,4 @@
  * { "exception": "TypeError" }
  *
  *)
- 
-true && (3/0 = 1) ;; 
+3 = true ;; 

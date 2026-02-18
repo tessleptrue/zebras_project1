@@ -1,6 +1,6 @@
 (*!tests!
  *
- * { "exception": ["2"] }
+ * { "output": ["2"] }
  *
  *) 
 

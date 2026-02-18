@@ -78,7 +78,9 @@ module Env = struct
   let fun_lookup (rho : t) (f : Ast.Id.t) : Value.t = 
     match List.assoc_opt f rho with
     | Some v -> v
-    | None -> raise (UndefinedFunction f)
+    | None -> raise (UndefinedFunction f) 
+    (*danner's test didn't accept when it was undefined function, so 
+    we need to make two different ones for fun look up and -> functions *)
 
   (*  update ρ x v = ρ{x → v}.
    *)
@@ -166,7 +168,7 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     (match (eval rho e) with
     | Value.V_Bool true -> eval rho e0
     | Value.V_Bool false -> eval rho e1
-    | _-> failwith "stupid" )
+    | _-> raise (TypeError "Invalid type "))
   | Ast.Expr.Call (f, exprs) -> 
     let valf =
       (match f with

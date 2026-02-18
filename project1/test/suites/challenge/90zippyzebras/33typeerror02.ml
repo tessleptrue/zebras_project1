@@ -4,5 +4,5 @@
  *
  *)
 
-let rec f x = if x = 0 then 1 else f (x - 1) / 0 ;;
-f 2 ;;
+let x = 5 in
+if 3 then x else 0 ;;
