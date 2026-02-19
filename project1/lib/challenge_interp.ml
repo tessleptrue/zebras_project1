@@ -170,81 +170,39 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     | Value.V_Bool false -> eval rho e1
     | _-> raise (TypeError "Invalid type "))
   | Ast.Expr.Call (f, exprs) -> 
-    let valf =
-      (match f with
-        | Ast.Expr.Var x -> Env.fun_lookup rho x
-        |_-> eval rho f)
+    let valf = (match f with
+      | Ast.Expr.Var x -> Env.fun_lookup rho x  (* raises UndefinedFunction *)
+      | _ -> eval rho f)
     in
-    (match valf with
-      | Value.V_Fun (ids, e, f_env) -> 
-        let vals = List.map (eval rho) exprs in (* here we evaluate expression list into val list *)
-        let rec arg_match (xs : Ast.Id.t list) (args : Value.t list) (f_env : Env.t) : Value.t = 
-          (match (xs, args) with
-            | (remains, []) -> Value.V_Fun (remains, e, f_env)
-            | ([], _) -> raise (TypeError "too many args")
-            | (y::ys, b::bs) -> arg_match ys bs (Env.update f_env y b))
-        in
-        (match (arg_match ids vals f_env) with
-          | Value.V_Fun ([], e, f_env) -> eval (Env.join rho f_env) e
-          | v -> v
-        )
-      | _-> raise (TypeError "failure")) 
-    (* (match f with
-      | Ast.Expr.Var x -> (match (Env.fun_lookup rho x) with
-                            | Value.V_Fun (args, e, f_env) -> 
-                              (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
-                                (match exprs with 
-                                  |[] -> []
-                                  |b::bs -> (eval rho b) :: (val_list bs))
-                                in
-                                eval (arg_match rho args (val_list exprs) f_env) e)
-                            |_ -> raise (TypeError "failure"))
-      | Ast.Expr.Num _ -> raise (TypeError "failure")
-      | Ast.Expr.Bool _ -> raise (TypeError "failure")
-      | Ast.Expr.Unop (_, _) -> raise (TypeError "failure")
-      | Ast.Expr.Binop (_, _, _) -> raise (TypeError "failure")
-      | Ast.Expr.If (e_ok, e0, e1) -> (match (eval rho (Ast.Expr.If (e_ok, e0, e1))) with
-                                    | Value.V_Fun (args, e, f_env) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
-                                        (match exprs with 
-                                          |[] -> []
-                                          |b::bs -> (eval rho b) :: (val_list bs))
-                                        in
-                                        eval (arg_match rho args (val_list exprs) f_env) e)
-                                    |_-> raise (TypeError "failure"))
-      | Ast.Expr.Let (x, e0, e1) -> (match (eval rho (Ast.Expr.Let (x, e0, e1))) with
-                                    | Value.V_Fun (args, e, f_env) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
-                                        (match exprs with 
-                                          |[] -> []
-                                          |b::bs -> (eval rho b) :: (val_list bs))
-                                        in
-                                        eval (arg_match rho args (val_list exprs) f_env) e)
-                                    |_-> raise (TypeError "failure"))
-      | Ast.Expr.Call (f, xs) -> (match (eval rho (Ast.Expr.Call (f, xs))) with
-                                    | Value.V_Fun (args, e, f_env) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
-                                        (match exprs with 
-                                          |[] -> []
-                                          |b::bs -> (eval rho b) :: (val_list bs))
-                                        in
-                                        eval (arg_match rho args (val_list exprs) f_env) e)
-                                    |_-> raise (TypeError "failure"))
-      | Ast.Expr.Fun (args, e) -> (match (eval rho (Ast.Expr.Fun (args, e))) with
-                                    | Value.V_Fun (args, e, f_env) -> (let rec val_list (exprs: Ast.Expr.t list) : Value.t list = 
-                                        (match exprs with 
-                                          |[] -> []
-                                          |b::bs -> (eval rho b) :: (val_list bs))
-                                        in
-                                        eval (arg_match rho args (val_list exprs) f_env) e)
-                                    |_-> raise (TypeError "failure"))) *)
+    let vals = List.map (eval rho) exprs in
+    let rec apply (vfunk : Value.t) (vals : Value.t list) : Value.t = 
+      (match vfunk with
+        | Value.V_Fun (xs, e, f_env) -> 
+                  let rec arg_match xs vals rho =
+                      match (xs, vals) with
+                      | ([], []) -> eval (Env.join f_env rho) e (* maybe other way around*)
+                      | (xs, []) -> Value.V_Fun (xs, e, Env.join f_env rho)
+                      | ([], remains) -> let result = eval (Env.join f_env rho) e in
+                                          apply result remains
+                      | (x::xs, v::vs) -> arg_match xs vs (Env.update rho x v)
+                    in
+                    arg_match xs vals Env.empty
+        |_-> raise (TypeError "that's not a function silly")  ) in
+      apply valf vals
+
+      (* maybe we need to double recur??? *)
   | Ast.Expr.Fun (xs, e) -> Value.V_Fun (xs, e, rho)
     (* Need to be able to incorporate environments for when there are fewer 
     arguments than parameters *)
     (* eval (assign_vals xs) e *)
 
 
+    
 let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
     match fds with
       | [] -> rho
-      | (f, x, v)::xs -> let rho' = def_funks (Env.fun_update rho f x v rho) xs in
+      | (f, x, v)::xs -> 
+        let rho' = def_funks (Env.fun_update rho f x v rho) xs in
           Env.fun_update rho' f x v rho'
       (* There is some issue here because functions cannot call themselves *)
 
