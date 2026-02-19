@@ -3,4 +3,5 @@
  * { "exception": "TypeError" }
  *
  *)
-3 = true ;; 
+
+5 / 0 ;; 

@@ -1,9 +1,10 @@
 (*!tests!
  *
- * { "exception": "TypeError" }
+ * { "output": ["6"] }
  *
  *) 
 
 
 let rec f x y = x * y ;;
-f 3 ;;
+(let g = f 3 in g 2) ;;
+
