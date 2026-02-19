@@ -24,6 +24,7 @@ module Value = struct
   type t = 
     | V_Int of int
     | V_Bool of bool
+    (* Function value of the form (parameters, body, function environment) *)
     | V_Fun of (Ast.Id.t list) * Ast.Expr.t * (Ast.Id.t * t) list
     [@@deriving show]
 
@@ -75,37 +76,39 @@ module Env = struct
     | Some v -> v
     | None -> raise (UnboundVariable x)
   
+    (* same as lookup but returns a different error for an undefined function *)
   let fun_lookup (rho : t) (f : Ast.Id.t) : Value.t = 
     match List.assoc_opt f rho with
     | Some v -> v
     | None -> raise (UndefinedFunction f) 
-    (*danner's test didn't accept when it was undefined function, so 
-    we need to make two different ones for fun look up and -> functions *)
 
   (*  update ρ x v = ρ{x → v}.
    *)
   let update (rho : t) (x : Ast.Id.t) (v : Value.t) : t =
     (x, v) :: List.remove_assoc x rho
   
-    (* Need to fix *)
+    (* updates a function in the environment with its name, parameter names, body, and environment *)
   let fun_update (rho : t) (f : Ast.Id.t) (args : Ast.Id.t list) (e : Ast.Expr.t) (f_env : t): t = 
     (f, Value.V_Fun (args, e, f_env)):: List.remove_assoc f rho
   
 end
 
+(* unary operations defined by type *)
 let unop (op : Ast.Expr.unop) (v : Value.t) : Value.t =
   match (op, v) with
   |(Ast.Expr.Not, Value.V_Bool n) -> Value.V_Bool (not n)
   |(Ast.Expr.Neg, Value.V_Int n) -> Value.V_Int (-n)
   |_  -> raise (TypeError "Invalid operand for unary operator")
 
-
+  (* binary operations defined by type *)
 let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   match (op, v, v') with
   | (Ast.Expr.Plus, Value.V_Int n, Value.V_Int n') -> Value.V_Int (n + n')
   | (Ast.Expr.Minus, Value.V_Int n, Value.V_Int n') -> Value.V_Int (n - n')
   | (Ast.Expr.Times, Value.V_Int n, Value.V_Int n') -> Value.V_Int (n * n')
+  (* division by zero is a type error *)
   | (Ast.Expr.Div, Value.V_Int _, Value.V_Int 0) -> raise (TypeError "division by zero")
+  (* modulo by zero is a type error *)
   | (Ast.Expr.Mod, Value.V_Int _, Value.V_Int 0) -> raise (TypeError "modulo by zero")
   | (Ast.Expr.Div, Value.V_Int n, Value.V_Int n') -> Value.V_Int (n / n')
   | (Ast.Expr.Mod, Value.V_Int n, Value.V_Int n') -> Value.V_Int (n mod n')
@@ -119,48 +122,19 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   | (Ast.Expr.Ge, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n >= n')
   |_ -> raise (TypeError "Unsupported expression")
 
-
-(* exec p = v, where `v` is the result of executing `p`.
- *)
-
- (* arg_match takes the arguments of a function (held in the environment) and 
- matches them to a val list (made by evalling all the expression in the call) *)
-
- (* so if there are more arguments in the function than there are evaluated, we pass 
-  thru a new function that has that number of arguments? *)
-
-(* let rec arg_match (arg_env : Env.t) (xs : Ast.Id.t list) (args : Value.t list) (f_env : Env.t) : Env.t = 
-    match (xs, args) with
-    | (_, []) -> Env.join arg_env f_env
-    | ([], _) -> raise (TypeError "too many args")
-    (* | (y::ys, []) -> match y with
-                  | V_Fun (args, e, f_env) -> 
-                  |_ -> failwith "too few arg" *)
-    | (y::ys, b::bs) -> (arg_match arg_env ys bs (Env.update f_env y b)) *)
-  
-(* let rec assign_vals (u_args : Id.t list) : Value.t list =
-    match u_args with
-    |[] -> []
-    |x::xs -> (lookup rho x) :: (assign_vals xs) *)
-
- (* Write a seperate eval function to evaluate expressions 
-  Like sample code, but now we have to deal with function definitions *)
 let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
   match e with
-(*! end !*)
+(* Same as core_interp eval up until call *)
   | Ast.Expr.Var x -> Env.lookup rho x
   | Ast.Expr.Num n -> Value.V_Int n
   | Ast.Expr.Bool b -> Value.V_Bool b
   |Ast.Expr.Unop (op, e) ->
     let v = eval rho e in 
     unop op v 
-(*! eval binop !*)
   | Ast.Expr.Binop (op, e, e') ->
     let v = eval rho e in
     let v' = eval rho e' in
     binop op v v'
-(*! end !*)
-(*! eval let !*)
   | Ast.Expr.Let (x, e', e) ->
     let v' = eval rho e' in
     eval (Env.update rho x v') e
@@ -170,42 +144,43 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     | Value.V_Bool false -> eval rho e1
     | _-> raise (TypeError "Invalid type "))
   | Ast.Expr.Call (f, exprs) -> 
+    (* first we evaluate f so that we can use it in apply *)
     let valf = (match f with
-      | Ast.Expr.Var x -> Env.fun_lookup rho x  (* raises UndefinedFunction *)
+      | Ast.Expr.Var x -> Env.fun_lookup rho x  (* so that it raises UndefinedFunction if fun_lookup doesn't work *)
       | _ -> eval rho f)
     in
+    (* here we map eval across the expressions the function is being applied to to get their values *)
     let vals = List.map (eval rho) exprs in
+
     let rec apply (vfunk : Value.t) (vals : Value.t list) : Value.t = 
       (match vfunk with
         | Value.V_Fun (xs, e, f_env) -> 
+                  (* arg_match takes the list of parameters and the evaluated arguments and attempts to apply them, 
+                  behavior is different depending on if there are more args that params, fewer args than params, or the same *)
                   let rec arg_match xs vals rho =
                       match (xs, vals) with
-                      | ([], []) -> eval (Env.join f_env rho) e (* maybe other way around*)
-                      | (xs, []) -> Value.V_Fun (xs, e, Env.join f_env rho)
+                      | ([], []) -> eval (Env.join f_env rho) e (* base case: same sizes evaluates the body *)
+                      | (xs, []) -> Value.V_Fun (xs, e, Env.join f_env rho) (* more params: evaluates to a function *)
                       | ([], remains) -> let result = eval (Env.join f_env rho) e in
-                                          apply result remains
-                      | (x::xs, v::vs) -> arg_match xs vs (Env.update rho x v)
+                                          apply result remains (* more args: recurs on apply to attempt to apply 
+                                                                if the result of eval of the body is a function itself*)
+                      | (x::xs, v::vs) -> arg_match xs vs (Env.update rho x v) (* recurs on arg_match to get through lists of params and args *)
                     in
-                    arg_match xs vals Env.empty
-        |_-> raise (TypeError "that's not a function silly")  ) in
-      apply valf vals
+                    arg_match xs vals rho (* use arg_match on parameters, evaluated arguments, and the environment *)
+        |_-> raise (TypeError "that's not a function silly")  (* if vfunk is not a function, we cannot call it on arguments *)
+          ) in
+      apply valf vals (* apply the evaluated function to the evaluated arguments *)
 
-      (* maybe we need to double recur??? *)
-  | Ast.Expr.Fun (xs, e) -> Value.V_Fun (xs, e, rho)
-    (* Need to be able to incorporate environments for when there are fewer 
-    arguments than parameters *)
-    (* eval (assign_vals xs) e *)
+  | Ast.Expr.Fun (xs, e) -> Value.V_Fun (xs, e, rho) (* returns function as a value type *)
 
 
-    
+(* def_funks takes the environment and the fun def list and defines each function in the environment *)
 let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
     match fds with
       | [] -> rho
-      | (f, x, v)::xs -> 
-        let rho' = def_funks (Env.fun_update rho f x v rho) xs in
-          Env.fun_update rho' f x v rho'
-      (* There is some issue here because functions cannot call themselves *)
+      | (f, x, v)::xs -> def_funks (Env.fun_update rho f x v rho) xs 
 
+(* exec is the same as core_interp, calls def_funks on the fundef list and then evaluates the body *)
 let exec (p : Ast.Script.t) : Value.t =
   match p with
     | Ast.Script.Pgm (fundefs, exp) -> 
