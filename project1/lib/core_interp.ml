@@ -37,6 +37,8 @@ end
 
 
 module Env = struct
+
+  (* Define type var(s), funk(s) so environment contains functions and variables seperately *)
   type var = (Ast.Id.t * Value.t) 
   type vars = var list
   (* Function name, arguments, expression *)
@@ -57,6 +59,7 @@ module Env = struct
     | Some v -> v
     | None -> raise (UnboundVariable x)
 
+    (*Same as lookup but raises a different error*)
   let fun_lookup (rho : t) (f : Ast.Id.t): Ast.Id.t list * Ast.Expr.t =
     let (_ , fs) = rho in
     match List.assoc_opt f fs with
@@ -68,23 +71,20 @@ module Env = struct
   let update (rho : t) (x : Ast.Id.t) (v : Value.t) : t =
     let (vs, fs) = rho in
     ((x, v) :: List.remove_assoc x vs, fs)
-  
+  (*Update the parameters, body of a function *)
   let fun_update (rho:t) (f : Ast.Id.t) (x : Ast.Id.t list) (vt :Ast.Expr.t) : t =
     let (vs, fs) = rho in
     (vs, (f, (x, vt)) :: List.remove_assoc f fs)
 end
 
-(* It looks like what we need to do is copy a bunch of stuff from OCaml--, then extend to include bools
-and if/then statements. Do we also need to add functions for reading scripts and programs??
-*)
-
+(* Define unops so they can be evaluated *)
 let unop (op : Ast.Expr.unop) (v : Value.t) : Value.t =
   match (op, v) with
   |(Ast.Expr.Not, Value.V_Bool n) -> Value.V_Bool (not n)
   |(Ast.Expr.Neg, Value.V_Int n) -> Value.V_Int (-n)
   |_  -> raise (TypeError "Invalid operand for unary operator")
 
-
+(* Define binops so they can be evaluated *)
 let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   match (op, v, v') with
   | (Ast.Expr.Plus, Value.V_Int n, Value.V_Int n') -> Value.V_Int (n + n')
@@ -104,19 +104,15 @@ let binop (op : Ast.Expr.binop) (v : Value.t) (v' : Value.t) : Value.t =
   | (Ast.Expr.Ge, Value.V_Int n, Value.V_Int n') -> Value.V_Bool (n >= n')
   |_ -> raise (TypeError "Unsupported expression")
 
-
-(* exec p = v, where `v` is the result of executing `p`.
- *)
-
-let rec arg_match (arg_env : Env.t) (xs : Ast.Id.t list) (args : Value.t list) : Env.t = 
-    match (xs, args) with
+(*Bind values to function parameters*)
+let rec arg_match (arg_env : Env.t) (xs : Ast.Id.t list) (vals : Value.t list) : Env.t = 
+    match (xs, vals) with
     | ([], []) -> arg_env
     | ([], _) -> raise (TypeError "too many args")
     | (_, []) -> raise (TypeError "too few args")
     | (y::ys, b::bs) -> (arg_match (Env.update arg_env y b) ys bs )
 
- (* Write a seperate eval function to evaluate expressions 
-  Like sample code, but now we have to deal with function definitions *)
+(* Evaluate an expression e in environment rho according the type of e*)
 let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
   match e with
 (*! end !*)
@@ -141,23 +137,25 @@ let rec eval (rho : Env.t) (e : Ast.Expr.t) : Value.t =
     | Value.V_Bool true -> eval rho e0
     | Value.V_Bool false -> eval rho e1
     | _-> raise (TypeError "Invalid Type") )
+    (**)
   | Ast.Expr.Call (f, args) -> 
     let (xs, e) = Env.fun_lookup rho f in
       let rec val_list (args: Ast.Expr.t list) : Value.t list = 
+        (*Evaluate each argument expresssion*)
         (match args with 
           |[] -> []
           |b::bs -> (eval rho b) :: (val_list bs))
          in
+         (*Bind each evaluated argument expression to function parameters and evaluate the function *)
          eval (arg_match rho xs (val_list args)) e
 
-
+(* Store functions in environment rho *)
 let rec def_funks (rho: Env.t) (fds: Ast.Script.fundef list) : Env.t =
     match fds with
       | [] -> rho
       | (f, x, v)::xs -> def_funks (Env.fun_update rho f x v) xs
-  
-        (* Env.fun_update (def_funks happy xs) f x v   *)
 
+(*Update environment and evaluate expressions in environment rho*)
 let exec (p : Ast.Script.t) : Value.t =
   match p with
     | Pgm (fundefs, exp) -> 
